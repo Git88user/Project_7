@@ -1,80 +1,130 @@
-import requests
+iimport requests
 import datetime
+from airflow import DAG
+from airflow.operators.bash_operator import BashOperator
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime, timedelta
 
-# Создаю словари значений из данных, предоставляемых API, для каждой валюты
-USD_url_conf = {
-    "USD_symbol": "symbol",
-    "USD_open": "open",
-    "USD_high:": "high",
-    "USD_low": "low",
-    "USD_price": "price",
-    "USD_volume": "volume",
-    "USD_latest trading day": "latest trading day",
-    "USD_previous close": "previous close",
-    "USD_change": "change",
-    "USD_change percent": "change percent",
-    "USD_url_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=USD&apikey=WEOQ7XCN7FTX2I4Z"
+import decimal
+from time import localtime, strftime
+from datetime import datetime
+
+# Создаю словари значений из данных, предоставляемых API, для USD
+# Создаю DAG для USD
+default_args = {
+    "owner": "airflow",
+    "start_date": days_ago(1)
 }
 
-CNY_url_conf = {
-    "CNY_symbol": "symbol",
-    "CNY_open": "open",
-    "CNY_high:": "high",
-    "CNY_low": "low",
-    "CNY_price": "price",
-    "CNY_volume": "volume",
-    "CNY_latest trading day": "latest trading day",
-    "CNY_previous close": "previous close",
-    "CNY_change": "change",
-    "CNY_change percent": "change percent",
-    "CNY_url_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=CNY&apikey=WEOQ7XCN7FTX2I4Z"
-}
+USD_variables = Variable.set(key="currency_load_variables",
+                         USD_url_conf = {
+                            "USD_symbol": "symbol",
+                            "USD_open": "open",
+                            "USD_high:": "high",
+                            "USD_low": "low",
+                            "USD_price": "price",
+                            "USD_volume": "volume",
+                            "USD_latest trading day": "latest trading day",
+                            "USD_previous close": "previous close",
+                            "USD_change": "change",
+                            "USD_change percent": "change percent",
+                            "USD_url_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=USD"
+                                            "&apikey=WEOQ7XCN7FTX2I4Z",
+                                            "connection_name": "my_db_conn"},
+                         serialize_json = True)
+USD_dag_variables = Variable.get("currency_load_variables", deserialize_json=True)
 
-IBM_url_conf = {
-    "IBM_symbol": "symbol",
-    "IBM_open": "open",
-    "IBM_high:": "high",
-    "IBM_low": "low",
-    "IBM_price": "price",
-    "IBM_volume": "volume",
-    "IBM_latest trading day": "latest trading day",
-    "IBM_previous close": "previous close",
-    "IBM_change": "change",
-    "IBM_change percent": "change percent",
-    "IBM_url_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=WEOQ7XCN7FTX2I4Z"
-}
+def import_codes(**kwargs):
+    url = USD_dag_variables.get('USD_url_base')
 
-USD_url = USD_url_conf['USD_url_base']
-CNY_url = CNY_url_conf['CNY_url_base']
-IBM_url = IBM_url_conf['IBM_url_base']
+    try:
+        response = requests.get(url, params={'base': USD_dag_variables.get('USD_url_base')})
+    except Exception as err:
+        print(f'Error occured: {err}')
+        return
 
-try:
-    response = requests.get(USD_url)
-except Exception as err:
-    print(f'Error occured: {err}')
+    data = response.json()
 
-data = response.json()
+with DAG(dag_id = "calc-rates", schedule_interval = "*/10 * * * *",
+    default_args = default_args, tag=["USD"], catchup = False) as dag:
 
-print(data)
+    USD_get_bash_task = BashOperator(task_id = 'bash_task', bash_command = "Get USD")
 
-try:
-    response = requests.get(CNY_url)
-except Exception as err:
-    print(f'Error occured: {err}')
+# Создаю словари значений из данных, предоставляемых API, для CNY
+# Создаю DAG для CNY
 
-data = response.json()
+CNY_variables = Variable.set(key="currency_load_variables",
+                             CNY_url_conf={
+                                 "CNY_symbol": "symbol",
+                                 "CNY_open": "open",
+                                 "CNY_high:": "high",
+                                 "CNY_low": "low",
+                                 "CNY_price": "price",
+                                 "CNY_volume": "volume",
+                                 "CNY_latest trading day": "latest trading day",
+                                 "CNY_previous close": "previous close",
+                                 "CNY_change": "change",
+                                 "CNY_change percent": "change percent",
+                                 "CNY_url_base":"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=CNY"
+                                                "&apikey=WEOQ7XCN7FTX2I4Z",
+                                 "connection_name": "my_db_conn"},
+                         serialize_json = True)
+CNY_dag_variables = Variable.get("currency_load_variables", deserialize_json=True)
 
-print(data)
+def import_codes(**kwargs):
+    url = CNY_dag_variables.get('CNY_url_base')
 
-try:
-    response = requests.get(IBM_url)
-except Exception as err:
-    print(f'Error occured: {err}')
+    try:
+        response = requests.get(url, params={'base': CNY_dag_variables.get('CNY_url_base')})
+    except Exception as err:
+        print(f'Error occured: {err}')
+        return
 
-data = response.json()
+    data = response.json()
 
-print(data)
+with DAG(dag_id = "calc-rates", schedule_interval = "*/10 * * * *",
+    default_args = default_args, tag=["CNY"], catchup = False) as dag:
 
+
+    CNY_get_bash_task = BashOperator(task_id = 'bash_task', bash_command = "Get CNY")
+
+# Создаю словари значений из данных, предоставляемых API, для IBM
+# Создаю DAG для IBM
+CNY_variables = Variable.set(key="currency_load_variables",
+                             IBM_url_conf = {
+                                "IBM_symbol": "symbol",
+                                "IBM_open": "open",
+                                "IBM_high:": "high",
+                                "IBM_low": "low",
+                                "IBM_price": "price",
+                                "IBM_volume": "volume",
+                                "IBM_latest trading day": "latest trading day",
+                                "IBM_previous close": "previous close",
+                                "IBM_change": "change",
+                                "IBM_change percent": "change percent",
+                                "IBM_url_base":
+                                    "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey"
+                                    "=WEOQ7XCN7FTX2I4Z",
+                                 "connection_name": "my_db_conn"},
+                         serialize_json = True)
+IBM_dag_variables = Variable.get("currency_load_variables", deserialize_json=True)
+
+def import_codes(**kwargs):
+    url = IBM_dag_variables.get('IBM_url_base')
+
+    try:
+        response = requests.get(url, params={'base': IBM_dag_variables.get('IBM_url_base')})
+    except Exception as err:
+        print(f'Error occured: {err}')
+        return
+
+    data = response.json()
+
+with DAG(dag_id = "calc-rates", schedule_interval = "*/10 * * * *",
+    default_args = default_args, tag=["IBM"], catchup = False) as dag:
+
+
+    IBM_get_bash_task = BashOperator(task_id = 'bash_task', bash_command = "Get IBM")
 
 # Инициирую подключение к БД Postgres
 import psycopg2
