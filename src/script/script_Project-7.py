@@ -1,4 +1,4 @@
-iimport requests
+import requests
 import datetime
 from airflow import DAG
 from airflow.operators.bash_operator import BashOperator
